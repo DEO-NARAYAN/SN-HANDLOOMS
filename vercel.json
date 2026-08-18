@@ -1,15 +1,16 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "server.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
     {
-      "src": "/(.*)",
-      "dest": "server.py"
+      "source": "/admin/",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
     }
   ]
 }

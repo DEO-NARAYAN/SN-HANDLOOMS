@@ -51,10 +51,20 @@ IMAGES_DIR = BASE_DIR / 'images'
 ADMIN_DIR = BASE_DIR / 'admin'
 PRODUCTS_FILE = DATA_DIR / 'products.json'
 
-DATA_DIR.mkdir(exist_ok=True)
-UPLOADS_DIR.mkdir(exist_ok=True)
-IMAGES_DIR.mkdir(exist_ok=True)
-ADMIN_DIR.mkdir(exist_ok=True)
+# Serverless / Read-only filesystem support
+IS_VERCEL = bool(os.environ.get('VERCEL'))
+TMP_DATA_DIR = Path('/tmp/sabnam_data') if IS_VERCEL else DATA_DIR
+TMP_PRODUCTS_FILE = TMP_DATA_DIR / 'products.json'
+
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    ADMIN_DIR.mkdir(parents=True, exist_ok=True)
+    if IS_VERCEL:
+        TMP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 ADMIN_ID = os.environ.get('ADMIN_ID', 'Sabnam@AVM1')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Sabnam@Handloom')
@@ -100,11 +110,14 @@ ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 
 # ─── Atomic File Storage Operations ──────────────────────────────
 def read_products():
-    """Reads all products from data/products.json safely."""
-    if not PRODUCTS_FILE.is_file():
+    """Reads all products safely from writable /tmp or static data/products.json."""
+    target = TMP_PRODUCTS_FILE if (IS_VERCEL and TMP_PRODUCTS_FILE.is_file()) else PRODUCTS_FILE
+    if not target.is_file():
+        target = PRODUCTS_FILE
+    if not target.is_file():
         return []
     try:
-        with open(PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+        with open(target, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if isinstance(data, list):
                 return data
@@ -114,13 +127,18 @@ def read_products():
         return []
 
 def write_products(products_list):
-    """Atomically writes products list to data/products.json."""
-    temp_file = DATA_DIR / f"products_temp_{uuid.uuid4().hex}.json"
+    """Atomically writes products list."""
+    save_dir = TMP_DATA_DIR if IS_VERCEL else DATA_DIR
+    target_file = TMP_PRODUCTS_FILE if IS_VERCEL else PRODUCTS_FILE
+    try:
+        save_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    temp_file = save_dir / f"products_temp_{uuid.uuid4().hex}.json"
     try:
         with open(temp_file, 'w', encoding='utf-8') as f:
             json.dump(products_list, f, indent=2, ensure_ascii=False)
-        # Atomic replace
-        temp_file.replace(PRODUCTS_FILE)
+        temp_file.replace(target_file)
         return True
     except Exception as e:
         print(f"[ERROR] Failed to write products atomically: {e}")
